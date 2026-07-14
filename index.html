@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Sounds — video luminosity into sound</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1a1a1a;
+    --panel: #232323;
+    --panel-raised: #2b2b2b;
+    --orange: #ff5a1f;
+    --orange-dim: #8a3a1c;
+    --orange-glow: rgba(255,90,31,0.55);
+    --cream: #ffffff;
+    --dim: #a8a6a2;
+    --line: #3a3a38;
+    --hair: #333331;
+    --danger: #b25a44;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--cream);
+    font-family: 'Inter', sans-serif;
+    min-height: 100%;
+  }
+
+  body{
+    padding: 28px 20px 60px;
+    background-image:
+      radial-gradient(ellipse 900px 500px at 50% -10%, rgba(255,90,31,0.07), transparent 60%);
+  }
+
+  .rig{
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  h1{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: clamp(22px, 4vw, 30px);
+    margin: 0;
+    color: var(--cream);
+  }
+  h1 span{ color: var(--orange); }
+  .tagline{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--dim);
+    letter-spacing: 0.03em;
+  }
+
+  /* ---------- stage (video + overlay) ---------- */
+  .stage-wrap{
+    display:flex;
+    align-items:stretch;
+  }
+
+  .stage{
+    position: relative;
+    flex: 1 1 auto;
+    background: #000;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .stage video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit: contain;
+    background:#000;
+  }
+  .stage canvas.overlay{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    pointer-events:auto;
+    touch-action: none;
+  }
+  .dropzone{
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap: 10px;
+    text-align:center;
+    padding: 20px;
+    border: 1px dashed var(--line);
+    color: var(--dim);
+    background: var(--panel);
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .dropzone.drag{ border-color: var(--orange); color: var(--orange); }
+  .dropzone .glyph{
+    width:40px; height:40px;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 16px;
+  }
+  .dropzone b{ color: var(--cream); font-weight:500; }
+  .dropzone small{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .03em;
+  }
+
+  /* ---------- soundtrack strip ---------- */
+  .strip-wrap{
+    margin-top: 6px;
+  }
+  .strip{
+    height: 68px;
+    background: #060606;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .strip canvas{ width:100%; height:100%; display:block; }
+
+  /* ---------- console ---------- */
+  .console{
+    margin-top: 22px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 18px 20px 8px;
+  }
+  .console-row{
+    display:flex;
+    align-items:center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .transport{
+    display:flex; align-items:center; gap:10px;
+  }
+  #playBtn{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    font-size: 13px;
+    background: var(--orange);
+    color: #1a1a1a;
+    border: none;
+    border-radius: 3px;
+    padding: 10px 20px;
+    cursor:pointer;
+    transition: filter .12s ease, transform .05s ease;
+  }
+  #playBtn:hover{ filter: brightness(1.08); }
+  #playBtn:active{ transform: translateY(1px); }
+  #playBtn:disabled{ background: var(--orange-dim); color: #6b3a20; cursor:not-allowed; }
+
+  .loadBtn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 9px 14px;
+    cursor:pointer;
+    transition: border-color .12s ease, color .12s ease;
+  }
+  .loadBtn:hover{ border-color: var(--orange-dim); color: var(--orange); }
+
+  .status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    margin-left: auto;
+  }
+  .status b{ color:var(--orange); font-weight:500; }
+
+  .midi-divider{
+    height: 1px;
+    background: var(--line);
+    margin: 4px 0 16px;
+  }
+  .midi-channels{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+    margin-bottom: 8px;
+  }
+  .midi-channel-item{
+    display:flex;
+    flex-direction:column;
+    gap: 5px;
+  }
+  .midi-channel-item span{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .midi-channel-item select{
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+  .stage.dragging{ cursor: grabbing; }
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 16px 22px;
+  }
+  .field{ }
+  .field-head{
+    display:flex; justify-content:space-between;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 7px;
+  }
+  .field-head b{ color: var(--orange); font-weight:500; }
+
+  input[type=range]{
+    -webkit-appearance:none;
+    width:100%;
+    height: 3px;
+    background: var(--line);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:13px; height:13px;
+    border-radius:50%;
+    background: var(--orange);
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 0 0 1px var(--orange-dim);
+    cursor:pointer;
+    margin-top:-5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px;
+    border-radius:50%;
+    background: var(--orange);
+    border: 2px solid #1a1a1a;
+    cursor:pointer;
+  }
+
+  select{
+    width:100%;
+    background: var(--panel-raised);
+    color: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 8px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor:pointer;
+  }
+
+  footer{
+    margin-top: 20px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.7;
+  }
+  footer a{ color: var(--orange); }
+
+  @media (max-width: 520px){
+    .console-row{ flex-direction: column; align-items: stretch; }
+    .status{ margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="rig">
+
+  <header>
+    <div>
+      <h1>Solar <span>Sounds</span></h1>
+      <div class="tagline">brightness, read frame by frame, becomes pitch</div>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <video id="video" playsinline loop muted></video>
+      <canvas class="overlay" id="overlay"></canvas>
+      <div class="dropzone" id="dropzone">
+        <div class="glyph">▶</div>
+        <div><b>Drop a video here</b><br>or click to choose a file</div>
+        <small>THE IRIS READS A RING OF PIXELS AROUND THE FRAME AS IT PLAYS</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="strip-wrap">
+    <div class="strip"><canvas id="stripCanvas"></canvas></div>
+  </div>
+
+  <div class="console">
+    <div class="console-row">
+      <div class="transport">
+        <button id="playBtn" disabled>Play</button>
+        <button class="loadBtn" id="loadBtnTop">Load video</button>
+      </div>
+      <div class="status" id="status">no film loaded</div>
+    </div>
+
+    <div class="grid">
+      <div class="field">
+        <div class="field-head"><span>Iris radius</span><b id="readHeadVal">50%</b></div>
+        <input type="range" id="readHead" min="0" max="100" value="50">
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Bands (voices)</span><b id="bandsVal">6</b></div>
+        <input type="range" id="bands" min="3" max="12" value="6" step="1">
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Scale</span></div>
+        <select id="scale">
+          <option value="pentaMajor" selected>Major pentatonic</option>
+          <option value="pentaMinor">Minor pentatonic</option>
+          <option value="major">Major</option>
+          <option value="minor">Natural minor</option>
+          <option value="wholeTone">Whole tone</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Register</span></div>
+        <select id="register">
+          <option value="55">Low</option>
+          <option value="110" selected>Mid</option>
+          <option value="220">High</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Key</span></div>
+        <select id="keySelect">
+          <option value="0">C</option>
+          <option value="1">C#</option>
+          <option value="2">D</option>
+          <option value="3">D#</option>
+          <option value="4">E</option>
+          <option value="5">F</option>
+          <option value="6">F#</option>
+          <option value="7">G</option>
+          <option value="8">G#</option>
+          <option value="9" selected>A</option>
+          <option value="10">A#</option>
+          <option value="11">B</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Sensitivity</span><b id="sensVal">1.0</b></div>
+        <input type="range" id="sensitivity" min="0.3" max="3" value="1" step="0.1">
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Reverb</span><b id="reverbVal">30%</b></div>
+        <input type="range" id="reverb" min="0" max="100" value="30">
+      </div>
+
+      <div class="field">
+        <div class="field-head"><span>Volume</span><b id="volVal">70%</b></div>
+        <input type="range" id="volume" min="0" max="100" value="70">
+      </div>
+    </div>
+
+    <div class="midi-divider"></div>
+
+    <div class="console-row">
+      <div class="transport">
+        <button class="loadBtn" id="midiEnableBtn">Enable MIDI</button>
+        <select id="midiOutput" disabled style="min-width:180px;">
+          <option value="">no MIDI outputs found</option>
+        </select>
+      </div>
+      <div class="status" id="midiStatus">midi out: off</div>
+    </div>
+
+    <div class="field-head" style="margin-top:2px;"><span>Per-band MIDI channel</span></div>
+    <div class="midi-channels" id="midiChannels"></div>
+  </div>
+
+  <footer>
+    HOW IT WORKS — every frame, a ring of sample points is read around the frame's centre, at the
+    iris radius you set. Each point around the ring drives one band; its brightness is quantised
+    to a note in the chosen scale and rendered as a smooth tone. Bright points play loud, dark
+    points stay near‑silent — the same principle 1920s optical film soundtracks used, with a
+    photocell reading light through moving film to make sound. Turn on MIDI Out to send the same
+    notes to a synth, DAW, or hardware instrument of your own instead of (or alongside) the built‑in tones.
+  </footer>
+
+</div>
+
+<input type="file" id="fileInput" accept="video/*" style="display:none">
+
+<script>
+(() => {
+  const video = document.getElementById('video');
+  const overlay = document.getElementById('overlay');
+  const octx = overlay.getContext('2d');
+  const stage = document.getElementById('stage');
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const playBtn = document.getElementById('playBtn');
+  const loadBtnTop = document.getElementById('loadBtnTop');
+  const statusEl = document.getElementById('status');
+  const stripCanvas = document.getElementById('stripCanvas');
+  const sctx = stripCanvas.getContext('2d');
+
+  const readHeadInput = document.getElementById('readHead');
+  const bandsInput = document.getElementById('bands');
+  const scaleInput = document.getElementById('scale');
+  const registerInput = document.getElementById('register');
+  const keySelect = document.getElementById('keySelect');
+  const sensitivityInput = document.getElementById('sensitivity');
+  const reverbInput = document.getElementById('reverb');
+  const volumeInput = document.getElementById('volume');
+
+  const readHeadVal = document.getElementById('readHeadVal');
+  const bandsVal = document.getElementById('bandsVal');
+  const sensVal = document.getElementById('sensVal');
+  const reverbVal = document.getElementById('reverbVal');
+  const volVal = document.getElementById('volVal');
+
+  const SCALES = {
+    pentaMajor: [0,2,4,7,9],
+    pentaMinor: [0,3,5,7,10],
+    major:      [0,2,4,5,7,9,11],
+    minor:      [0,2,3,5,7,8,10],
+    wholeTone:  [0,2,4,6,8,10],
+  };
+
+  const MAX_BANDS = 12;
+  const midiChannelsEl = document.getElementById('midiChannels');
+
+  // per-band angle (radians) around the iris ring; user-draggable, persists across band-count changes
+  let bandAngles = new Array(MAX_BANDS).fill(0).map((_, i) => -Math.PI/2 + (i / MAX_BANDS) * Math.PI * 2);
+  // per-band MIDI channel (1-16), independent of band index
+  let bandChannels = new Array(MAX_BANDS).fill(0).map((_, i) => (i % 16) + 1);
+  let draggingBand = null;
+  let hoverBand = null;
+
+  let playing = false;
+  let hasVideo = false;
+  let audioCtx = null;
+  let masterGain, reverbSend, convolver, dryGain;
+  let bands = []; // {osc, gain, lastFreq}
+  let numBands = parseInt(bandsInput.value, 10);
+
+  // ---- MIDI state ----
+  const midiEnableBtn = document.getElementById('midiEnableBtn');
+  const midiOutputSelect = document.getElementById('midiOutput');
+  const midiStatus = document.getElementById('midiStatus');
+  let midiAccess = null;
+  let midiOutput = null;
+  let midiOn = false;
+  let midiLastNote = new Array(MAX_BANDS).fill(null); // per-band currently sounding note, or null
+
+  // ---- sampling canvas (small, off-DOM) ----
+  const sampleCanvas = document.createElement('canvas');
+  const sctxSample = sampleCanvas.getContext('2d', { willReadFrequently: true });
+  const SAMPLE_W = 128;
+  let SAMPLE_H = 72;
+
+  // ---------------- file loading ----------------
+  function loadFile(file){
+    if(!file || !file.type.startsWith('video/')) return;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.load();
+    hasVideo = true;
+    dropzone.style.display = 'none';
+    playBtn.disabled = false;
+    statusEl.innerHTML = 'loaded: <b>' + escapeHtml(file.name) + '</b>';
+  }
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+  loadBtnTop.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  ['dragenter','dragover'].forEach(evt => {
+    stage.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    stage.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  stage.addEventListener('drop', e => {
+    e.preventDefault();
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) loadFile(f);
+  });
+
+  video.addEventListener('loadedmetadata', () => {
+    SAMPLE_H = Math.max(24, Math.round(SAMPLE_W * (video.videoHeight / video.videoWidth)));
+    sampleCanvas.width = SAMPLE_W;
+    sampleCanvas.height = SAMPLE_H;
+    resizeOverlay();
+  });
+
+  function resizeOverlay(){
+    const rect = stage.getBoundingClientRect();
+    overlay.width = rect.width;
+    overlay.height = rect.height;
+    stripCanvas.width = stripCanvas.parentElement.clientWidth;
+    stripCanvas.height = stripCanvas.parentElement.clientHeight;
+    sctx.fillStyle = '#060606';
+    sctx.fillRect(0,0,stripCanvas.width, stripCanvas.height);
+  }
+  window.addEventListener('resize', resizeOverlay);
+
+  // ---------------- audio setup ----------------
+  function createImpulseResponse(ctx, duration, decay){
+    const rate = ctx.sampleRate;
+    const length = Math.floor(rate * duration);
+    const impulse = ctx.createBuffer(2, length, rate);
+    for(let ch = 0; ch < 2; ch++){
+      const data = impulse.getChannelData(ch);
+      for(let i = 0; i < length; i++){
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+    }
+    return impulse;
+  }
+
+  function setupAudio(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = parseFloat(volumeInput.value) / 100;
+
+    dryGain = audioCtx.createGain();
+    dryGain.gain.value = 1;
+
+    reverbSend = audioCtx.createGain();
+    reverbSend.gain.value = parseFloat(reverbInput.value) / 100;
+
+    convolver = audioCtx.createConvolver();
+    convolver.buffer = createImpulseResponse(audioCtx, 2.6, 2.2);
+
+    dryGain.connect(masterGain);
+    reverbSend.connect(convolver);
+    convolver.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    buildBands(numBands);
+  }
+
+  function buildBands(n){
+    // tear down old
+    bands.forEach(b => {
+      try{ b.osc.stop(); }catch(e){}
+      try{ b.osc.disconnect(); }catch(e){}
+      try{ b.gain.disconnect(); }catch(e){}
+    });
+    bands = [];
+    const now = audioCtx.currentTime;
+    for(let i = 0; i < n; i++){
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      const g = audioCtx.createGain();
+      g.gain.value = 0;
+      osc.connect(g);
+      g.connect(dryGain);
+      g.connect(reverbSend);
+      osc.frequency.value = 220;
+      osc.start(now);
+      bands.push({ osc, gain: g, lastFreq: 220 });
+    }
+  }
+
+  // ---------------- musical mapping ----------------
+  function freqForBand(i, n, luminosity01){
+    const intervals = SCALES[scaleInput.value] || SCALES.pentaMajor;
+    const root = parseFloat(registerInput.value);
+    // register frequencies (55/110/220) are tuned to A; shift by the chosen key's offset from A
+    const keyOffset = parseInt(keySelect.value, 10) - 9;
+    const keyedRoot = root * Math.pow(2, keyOffset / 12);
+    // top band (i=0) = higher octave, bottom band = lower
+    const octave = (n - 1 - i) / Math.max(1, n - 1) * 2.2; // spans ~2.2 octaves
+    const baseFreq = keyedRoot * Math.pow(2, octave);
+    const idx = Math.min(intervals.length - 1, Math.floor(luminosity01 * intervals.length));
+    const semitone = intervals[idx];
+    return baseFreq * Math.pow(2, semitone / 12);
+  }
+
+  // ---------------- render + sample loop ----------------
+  let stripX = 0;
+
+  function drawOverlay(radiusFrac, lumis){
+    const w = overlay.width, h = overlay.height;
+    octx.clearRect(0,0,w,h);
+    const cx = w/2, cy = h/2;
+    const maxR = Math.sqrt(cx*cx + cy*cy);
+    const r = radiusFrac * maxR;
+
+    // iris ring
+    octx.strokeStyle = 'rgba(255,90,31,0.45)';
+    octx.lineWidth = 1;
+    octx.beginPath();
+    octx.arc(cx, cy, r, 0, Math.PI*2);
+    octx.stroke();
+
+    // centre mark
+    octx.strokeStyle = 'rgba(255,90,31,0.25)';
+    octx.beginPath();
+    octx.moveTo(cx-6, cy); octx.lineTo(cx+6, cy);
+    octx.moveTo(cx, cy-6); octx.lineTo(cx, cy+6);
+    octx.stroke();
+
+    const n = lumis.length;
+    for(let i = 0; i < n; i++){
+      const theta = bandAngles[i];
+      const x = cx + r * Math.cos(theta);
+      const y = cy + r * Math.sin(theta);
+      const l = lumis[i];
+      const rad = 3 + (l/255) * 7;
+      const isActive = (i === draggingBand || i === hoverBand);
+
+      if(isActive){
+        octx.beginPath();
+        octx.strokeStyle = 'rgba(255,255,255,0.85)';
+        octx.lineWidth = 1.5;
+        octx.arc(x, y, rad + 5, 0, Math.PI*2);
+        octx.stroke();
+      }
+
+      octx.beginPath();
+      octx.fillStyle = `rgba(255,90,31,${0.25 + (l/255)*0.7})`;
+      octx.shadowColor = 'rgba(255,90,31,0.8)';
+      octx.shadowBlur = 6 + (l/255)*10;
+      octx.arc(x, y, rad, 0, Math.PI*2);
+      octx.fill();
+    }
+    octx.shadowBlur = 0;
+  }
+
+  function drawStrip(lumis){
+    const w = stripCanvas.width, h = stripCanvas.height;
+    if(w < 2 || h < 2) return;
+    // shift left by 2px
+    const img = sctx.getImageData(2, 0, w-2, h);
+    sctx.putImageData(img, 0, 0);
+    sctx.fillStyle = '#060606';
+    sctx.fillRect(w-2, 0, 2, h);
+
+    const n = lumis.length;
+    for(let i = 0; i < n; i++){
+      const l = lumis[i] / 255;
+      const bandH = h / n;
+      const yTop = i * bandH;
+      const barH = l * bandH * 0.9;
+      const yc = yTop + bandH/2;
+      sctx.fillStyle = `rgba(255,90,31,${0.2 + l*0.8})`;
+      sctx.fillRect(w-2, yc - barH/2, 2, Math.max(1,barH));
+    }
+  }
+
+  function tick(){
+    requestAnimationFrame(tick);
+
+    const radiusFrac = parseFloat(readHeadInput.value) / 100;
+    const lumis = new Array(numBands).fill(0);
+
+    const canSample = hasVideo && video.readyState >= 2;
+    if(canSample){
+      sctxSample.drawImage(video, 0, 0, SAMPLE_W, SAMPLE_H);
+      let data = null;
+      try{
+        data = sctxSample.getImageData(0, 0, SAMPLE_W, SAMPLE_H).data;
+      }catch(e){ data = null; }
+
+      if(data){
+        const sens = parseFloat(sensitivityInput.value);
+        const scx = SAMPLE_W/2, scy = SAMPLE_H/2;
+        const sMaxR = Math.sqrt(scx*scx + scy*scy);
+        const sr = radiusFrac * sMaxR;
+        const audioLive = playing && audioCtx;
+        const now = audioLive ? audioCtx.currentTime : 0;
+
+        for(let i = 0; i < numBands; i++){
+          const theta = bandAngles[i];
+          const sx = Math.min(SAMPLE_W - 1, Math.max(0, Math.round(scx + sr * Math.cos(theta))));
+          const sy = Math.min(SAMPLE_H - 1, Math.max(0, Math.round(scy + sr * Math.sin(theta))));
+          const idx = (sy * SAMPLE_W + sx) * 4;
+          const r = data[idx], g = data[idx+1], b = data[idx+2];
+          const lum = 0.2126*r + 0.7152*g + 0.0722*b; // 0..255
+          lumis[i] = lum;
+
+          const lum01 = Math.min(1, (lum/255) * sens);
+
+          if(audioLive){
+            const targetFreq = freqForBand(i, numBands, lum01);
+            const b_ = bands[i];
+            if(b_){
+              b_.osc.frequency.setTargetAtTime(targetFreq, now, 0.06);
+              const dark = lum01 < 0.06 ? 0 : lum01;
+              b_.gain.gain.setTargetAtTime(dark * 0.18, now, 0.08);
+            }
+            if(midiOn && midiOutput){
+              sendMidiForBand(i, targetFreq, lum01);
+            }
+          }
+        }
+      }
+    }
+
+    drawOverlay(radiusFrac, lumis);
+    if(playing) drawStrip(lumis);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------------- MIDI ----------------
+  function freqToMidiNote(freq){
+    return Math.round(69 + 12 * Math.log2(freq / 440));
+  }
+
+  function allNotesOff(){
+    if(!midiOutput) return;
+    for(let i = 0; i < MAX_BANDS; i++){
+      const note = midiLastNote[i];
+      if(note != null){
+        const ch = (bandChannels[i] - 1) & 0x0f;
+        midiOutput.send([0x80 | ch, note, 0]);
+      }
+    }
+    midiLastNote = midiLastNote.map(() => null);
+  }
+
+  function sendMidiForBand(i, freq, lum01){
+    const ch = (bandChannels[i] - 1) & 0x0f;
+    const dark = lum01 < 0.06;
+    const velocity = Math.max(0, Math.min(127, Math.round(lum01 * 127)));
+    const note = Math.max(0, Math.min(127, freqToMidiNote(freq)));
+
+    if(dark){
+      if(midiLastNote[i] != null){
+        midiOutput.send([0x80 | ch, midiLastNote[i], 0]);
+        midiLastNote[i] = null;
+      }
+      return;
+    }
+
+    if(midiLastNote[i] !== note){
+      if(midiLastNote[i] != null){
+        midiOutput.send([0x80 | ch, midiLastNote[i], 0]);
+      }
+      midiOutput.send([0x90 | ch, note, velocity]);
+      midiLastNote[i] = note;
+    } else {
+      // same note still sounding: shape volume with expression rather than retriggering
+      midiOutput.send([0xB0 | ch, 11, velocity]);
+    }
+  }
+
+  function populateMidiOutputs(){
+    const outputs = Array.from(midiAccess.outputs.values());
+    midiOutputSelect.innerHTML = '';
+    if(outputs.length === 0){
+      midiOutputSelect.innerHTML = '<option value="">no MIDI outputs found</option>';
+      midiOutputSelect.disabled = true;
+      midiOutput = null;
+      return;
+    }
+    outputs.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = o.name;
+      midiOutputSelect.appendChild(opt);
+    });
+    midiOutputSelect.disabled = false;
+    midiOutput = outputs[0];
+    midiOutputSelect.value = outputs[0].id;
+  }
+
+  function buildMidiChannelUI(n){
+    midiChannelsEl.innerHTML = '';
+    for(let i = 0; i < n; i++){
+      const item = document.createElement('div');
+      item.className = 'midi-channel-item';
+
+      const label = document.createElement('span');
+      label.textContent = 'Band ' + (i + 1);
+
+      const sel = document.createElement('select');
+      for(let c = 1; c <= 16; c++){
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = 'Ch ' + c;
+        if(c === bandChannels[i]) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', () => {
+        // if this band had a sounding note on its old channel, release it first
+        if(midiOutput && midiLastNote[i] != null){
+          const oldCh = (bandChannels[i] - 1) & 0x0f;
+          midiOutput.send([0x80 | oldCh, midiLastNote[i], 0]);
+          midiLastNote[i] = null;
+        }
+        bandChannels[i] = parseInt(sel.value, 10);
+      });
+
+      item.appendChild(label);
+      item.appendChild(sel);
+      midiChannelsEl.appendChild(item);
+    }
+  }
+  buildMidiChannelUI(numBands);
+
+  midiEnableBtn.addEventListener('click', async () => {
+    if(!navigator.requestMIDIAccess){
+      midiStatus.textContent = 'midi out: not supported in this browser';
+      return;
+    }
+    if(!midiAccess){
+      try{
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        populateMidiOutputs();
+        midiAccess.onstatechange = populateMidiOutputs;
+      }catch(e){
+        midiStatus.textContent = 'midi out: permission denied';
+        return;
+      }
+    }
+    midiOn = !midiOn;
+    midiEnableBtn.textContent = midiOn ? 'Disable MIDI' : 'Enable MIDI';
+    midiStatus.textContent = midiOn
+      ? ('midi out: on → ' + (midiOutput ? midiOutput.name : 'no device'))
+      : 'midi out: off';
+    if(!midiOn) allNotesOff();
+  });
+
+  midiOutputSelect.addEventListener('change', () => {
+    if(!midiAccess) return;
+    allNotesOff();
+    midiOutput = midiAccess.outputs.get(midiOutputSelect.value) || null;
+    if(midiOn){
+      midiStatus.textContent = 'midi out: on → ' + (midiOutput ? midiOutput.name : 'no device');
+    }
+  });
+
+  // ---------------- transport ----------------
+  playBtn.addEventListener('click', async () => {
+    if(!hasVideo) return;
+    setupAudio();
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+
+    if(!playing){
+      await video.play();
+      playing = true;
+      playBtn.textContent = 'Pause';
+    } else {
+      video.pause();
+      playing = false;
+      playBtn.textContent = 'Play';
+      bands.forEach(b => b.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05));
+      allNotesOff();
+    }
+  });
+
+  // ---------------- control bindings ----------------
+  readHeadInput.addEventListener('input', () => {
+    readHeadVal.textContent = readHeadInput.value + '%';
+  });
+  bandsInput.addEventListener('input', () => {
+    numBands = parseInt(bandsInput.value, 10);
+    bandsVal.textContent = numBands;
+    if(audioCtx) buildBands(numBands);
+    buildMidiChannelUI(numBands);
+  });
+  sensitivityInput.addEventListener('input', () => {
+    sensVal.textContent = parseFloat(sensitivityInput.value).toFixed(1);
+  });
+  reverbInput.addEventListener('input', () => {
+    reverbVal.textContent = reverbInput.value + '%';
+    if(reverbSend) reverbSend.gain.setTargetAtTime(parseFloat(reverbInput.value)/100, audioCtx.currentTime, 0.05);
+  });
+  volumeInput.addEventListener('input', () => {
+    volVal.textContent = volumeInput.value + '%';
+    if(masterGain) masterGain.gain.setTargetAtTime(parseFloat(volumeInput.value)/100, audioCtx.currentTime, 0.05);
+  });
+  scaleInput.addEventListener('change', () => {});
+  registerInput.addEventListener('change', () => {});
+  keySelect.addEventListener('change', () => {});
+
+  // ---------------- drag band nodes around the iris ring ----------------
+  function nodePositions(){
+    const w = overlay.width, h = overlay.height;
+    const cx = w/2, cy = h/2;
+    const maxR = Math.sqrt(cx*cx + cy*cy);
+    const r = (parseFloat(readHeadInput.value) / 100) * maxR;
+    const pts = [];
+    for(let i = 0; i < numBands; i++){
+      const theta = bandAngles[i];
+      pts.push({ x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) });
+    }
+    return { cx, cy, pts };
+  }
+
+  function pointerPos(e){
+    const rect = overlay.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function hitTestNode(px, py){
+    const { pts } = nodePositions();
+    const HIT_R = 14;
+    let best = null, bestDist = Infinity;
+    for(let i = 0; i < pts.length; i++){
+      const dx = px - pts[i].x, dy = py - pts[i].y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if(d <= HIT_R && d < bestDist){ best = i; bestDist = d; }
+    }
+    return best;
+  }
+
+  overlay.addEventListener('pointerdown', (e) => {
+    const p = pointerPos(e);
+    const hit = hitTestNode(p.x, p.y);
+    if(hit != null){
+      draggingBand = hit;
+      overlay.setPointerCapture(e.pointerId);
+      stage.classList.add('dragging');
+      e.preventDefault();
+    }
+  });
+
+  overlay.addEventListener('pointermove', (e) => {
+    const p = pointerPos(e);
+    if(draggingBand != null){
+      const { cx, cy } = nodePositions();
+      bandAngles[draggingBand] = Math.atan2(p.y - cy, p.x - cx);
+    } else {
+      const hit = hitTestNode(p.x, p.y);
+      hoverBand = hit;
+      overlay.style.cursor = hit != null ? 'grab' : 'default';
+    }
+  });
+
+  function endDrag(e){
+    if(draggingBand != null){
+      draggingBand = null;
+      stage.classList.remove('dragging');
+      if(e && e.pointerId != null){
+        try{ overlay.releasePointerCapture(e.pointerId); }catch(err){}
+      }
+    }
+  }
+  overlay.addEventListener('pointerup', endDrag);
+  overlay.addEventListener('pointercancel', endDrag);
+  overlay.addEventListener('pointerleave', () => { hoverBand = null; });
+
+  // initial sizing
+  window.addEventListener('load', resizeOverlay);
+  setTimeout(resizeOverlay, 50);
+})();
+</script>
+</body>
+</html>
